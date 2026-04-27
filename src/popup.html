@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 350px;
+      min-height: 200px;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #111111 0%, #1a1a1a 50%, #0d0d0d 100%);
+      color: white;
+      margin: 0;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 25px;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 600;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .header h1 span {
+      color: #008692;
+    }
+    
+    .header p {
+      margin: 5px 0 0 0;
+      opacity: 0.75;
+      font-size: 13px;
+    }
+    
+    .form-group {
+      margin-bottom: 20px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      font-size: 14px;
+    }
+    
+    input[type="password"] {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      background: rgba(255, 255, 255, 0.95);
+      color: #333;
+      box-sizing: border-box;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    }
+    
+    input[type="password"]:focus {
+      outline: none;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(79, 195, 247, 0.3), 0 4px 15px rgba(0, 0, 0, 0.15);
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+    }
+    
+    .btn-primary {
+      background: #008692;
+      color: #ffffff;
+    }
+    
+    .btn-primary:hover {
+      background: #00a3b1;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+    }
+    
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+    
+    .status {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    
+    .status.show { opacity: 1; }
+    
+    .status.success {
+      background: rgba(76, 175, 80, 0.25);
+      border: 1px solid rgba(76, 175, 80, 0.4);
+      color: #e8f5e8;
+    }
+    
+    .status.error {
+      background: rgba(244, 67, 54, 0.25);
+      border: 1px solid rgba(244, 67, 54, 0.4);
+      color: #ffeaea;
+    }
+    
+    .status.info {
+      background: rgba(79, 195, 247, 0.25);
+      border: 1px solid rgba(79, 195, 247, 0.4);
+      color: #e3f2fd;
+    }
+    
+    .help {
+      margin-top: 20px;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    
+    .help a {
+      color: #00a3b1;
+      text-decoration: underline;
+    }
+    
+    .help a:hover {
+      color: white;
+    }
+
+    .footer {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 11px;
+      opacity: 0.4;
+    }
+    
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    body > * { animation: fadeInUp 0.5s ease forwards; }
+    .header { animation-delay: 0.05s; }
+    .form-group { animation-delay: 0.1s; }
+    .btn { animation-delay: 0.15s; }
+    .help { animation-delay: 0.2s; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>GTM<span>13h</span></h1>
+    <p>Version Generator — Configuration</p>
+  </div>
+  
+  <div class="form-group">
+    <label for="apiKey">Clé API Google Gemini :</label>
+    <input 
+      type="password" 
+      id="apiKey" 
+      placeholder="Collez votre clé API ici..."
+      autocomplete="off"
+    >
+  </div>
+  
+  <button class="btn btn-primary" id="saveBtn">
+    Enregistrer
+  </button>
+  
+  <div class="status" id="status"></div>
+  
+  <div class="help">
+    <strong>Obtenir une clé API :</strong><br>
+    1. Ouvrir <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a><br>
+    2. Créer un projet si nécessaire<br>
+    3. Générer une clé API<br>
+    4. La coller dans le champ ci-dessus
+  </div>
+
+  <div class="footer">M13h — Cosmo5 Group</div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

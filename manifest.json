@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "GTM13h — Version Generator",
+  "version": "1.1.0",
+  "description": "Génère automatiquement des noms et descriptions de versions GTM à partir des modifications du workspace.",
+  "author": "M13h",
+  
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  
+  "host_permissions": [
+    "https://tagmanager.google.com/*",
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  
+  "background": {
+    "service_worker": "src/background.js"
+  },
+
+  "action": {
+    "default_popup": "src/popup.html",
+    "default_title": "GTM13h — Version Generator",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://tagmanager.google.com/*"],
+      "js": ["src/content.js"],
+      "css": ["src/style.css"],
+      "run_at": "document_end"
+    }
+  ]
+}
