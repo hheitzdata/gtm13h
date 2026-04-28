@@ -67,7 +67,7 @@ L'extension nécessite une clé API Gemini (gratuite) :
 
 1. Aller sur [Google AI Studio](https://aistudio.google.com/apikey)
 2. Se connecter avec votre compte Google
-3. Cliquer **Create API Key** → sélectionner le projet **Generative Language Client** (projet par défaut, il convient parfaitement)
+3. Cliquer **Create API Key** → sélectionner le projet **Generative Language Client / Default...** (projet par défaut, il convient parfaitement)
 4. Copier la clé générée (elle commence par `AIza...`)
 5. Cliquer sur l'icône GTM13h dans Chrome → coller la clé → **Enregistrer**
 
