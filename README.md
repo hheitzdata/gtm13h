@@ -4,7 +4,7 @@ Extension Chrome qui génère automatiquement les noms et descriptions de versio
 
 Quand on publie un workspace GTM, il faut renseigner un nom de version et une description. En pratique on fait ça à la va-vite ou on oublie, et on se retrouve avec un historique illisible. GTM13h lit les modifications du workspace et propose un nom + une description structurée, prête à publier.
 
-Développé par [M13h](https://www.m13h.com) — Cosmo5 Group.
+Développé par Hugo Heitz - Data Manager @ [M13h](https://www.m13h.com) — Cosmo5 Group.
 
 ---
 
