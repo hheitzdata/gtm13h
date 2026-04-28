@@ -543,40 +543,57 @@ class GTM13hGenerator {
     if (!window.location.hostname.includes('tagmanager.google.com')) {
       throw new Error('Extension utilisable uniquement sur GTM');
     }
-    
+
     if (!apiKey || !apiKey.startsWith('AIza') || apiKey.length < 35) {
       throw new Error('Clé API invalide');
     }
-    
-    const prompt = this.buildPrompt(changes);
-    
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 512,
-        }
-      })
+
+    const button = document.querySelector('.gtm13h-button');
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+
+    for (const model of models) {
+      const result = await this.tryModel(apiKey, model, changes, button);
+      if (result !== null) return result;
+      if (button) button.innerHTML = 'Modèle alternatif...';
+    }
+
+    throw new Error('API Gemini indisponible. Réessayez dans quelques instants.');
+  }
+
+  async tryModel(apiKey, model, changes, button) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: this.buildPrompt(changes) }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 512 }
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        if (button) button.innerHTML = `Nouvelle tentative (${attempt}/2)...`;
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        if (!rawText) throw new Error('Réponse vide de l\'API Gemini');
+        console.log(`[GTM13h] Réponse Gemini (${model}) :`, rawText);
+        return this.parseGeminiResponse(rawText, changes);
+      }
+
+      if (response.status === 503 || response.status === 429) continue;
+
+      const errorData = await response.json().catch(() => ({}));
       throw new Error(`API Gemini : ${errorData.error?.message || 'Erreur inconnue'}`);
     }
 
-    const data = await response.json();
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    
-    if (!rawText) {
-      throw new Error('Réponse vide de l\'API Gemini');
-    }
-    
-    console.log('[GTM13h] Réponse Gemini :', rawText);
-    
-    return this.parseGeminiResponse(rawText, changes);
+    return null;
   }
 
   parseGeminiResponse(rawText, changes) {
