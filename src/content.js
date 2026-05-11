@@ -210,6 +210,17 @@ class GTM13hGenerator {
     element.dispatchEvent(new Event('keyup', { bubbles: true }));
   }
 
+  buildFallbackResult(changes) {
+    const isFR = this.detectLanguage() === 'fr';
+    const date = new Date().toLocaleDateString(isFR ? 'fr-FR' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const types = [...new Set(changes.map(c => c.type).filter(Boolean))];
+    const name = isFR ? `Version ${date}` : `Version ${date}`;
+    const summary = isFR
+      ? `Publication du ${date} — API Gemini indisponible, description générée automatiquement.`
+      : `Published ${date} — Gemini API unavailable, description auto-generated.`;
+    return this.buildOutput({ name, summary, themeGroups: [], details: {} }, changes);
+  }
+
   // Construire la sortie finale : Gemini fournit le titre + résumé, JS structure la liste
   buildOutput(aiResult, changes) {
     const isFR = this.detectLanguage() === 'fr';
@@ -561,14 +572,14 @@ class GTM13hGenerator {
       if (button) button.innerHTML = 'Modèle alternatif...';
     }
 
-    throw new Error('API Gemini indisponible. Réessayez dans quelques instants.');
+    return this.buildFallbackResult(changes);
   }
 
   async tryModel(apiKey, model, changes, button) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const body = JSON.stringify({
       contents: [{ parts: [{ text: this.buildPrompt(changes) }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 1024 }
+      generationConfig: { temperature: 0.3, maxOutputTokens: 768 }
     });
 
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -675,44 +686,28 @@ class GTM13hGenerator {
     const changesText = changes.map(c => `- [${c.action}] ${c.type} : "${c.name}"`).join('\n');
 
     if (isFR) {
-      return `Tu es un expert Google Tag Manager. Un consultant analytics publie un workspace GTM. Génère un titre et une description qui permettent à n'importe quel collègue de comprendre en un coup d'œil ce qui a été fait et pourquoi — pas juste une liste, mais une vraie lecture analytique.
-
-Modifications du workspace :
+      return `Expert GTM. Workspace publié avec ces modifications :
 ${changesText}
 
-Réponds EXACTEMENT dans ce format (aucune ligne vide, aucun markdown, aucun backtick) :
+Format STRICT (pas de markdown, pas de ligne vide) :
+NAME: titre français max 70 car. Ex: "MAJ Commanders Act, Meta et e-commerce"
+SUMMARY: 1 phrase complète sur l'objectif métier, terminée par un point.
+GROUP: Plateforme — ce que ces changements font ensemble (2-3 lignes, une par thème)
+DETAIL|nom EXACT|explication 5-12 mots
 
-NAME: titre court en français (max 70 caractères)
-SUMMARY: une phrase complète décrivant l'objectif global de cette version
-GROUP: Thème — ce que ces changements apportent concrètement (2 à 4 lignes GROUP, une par plateforme ou thème logique)
-DETAIL|nom exact element|explication courte (5 à 15 mots)
-
-Règles :
-- NAME : professionnel, clair, en français. Regroupe les grands thèmes. Ex: "MAJ tracking Commanders Act, Meta et e-commerce"
-- SUMMARY : phrase COMPLÈTE sur l'objectif métier. Doit se terminer par un point. Ex: "Déploiement du tracking Commanders Act serverside, refonte des balises Meta et ajout du suivi e-commerce."
-- GROUP : une ligne par plateforme ou thème logique. Regroupe intelligemment les éléments liés. Format: "Thème — ce que ces changements font ensemble". 2 à 4 lignes max. Ex: "Commanders Act — intégration bridge serverside, SDK JS et variables site ID / source key"
-- DETAIL : une ligne par élément, nom EXACT entre les pipes, explication 5 à 15 mots.
-- Aucun JSON, markdown, backtick, guillemet ou caractère spécial hors format.`;
+Règles : NAME regroupe les grands thèmes. SUMMARY = objectif métier complet. GROUP = lecture analytique par plateforme. DETAIL = une ligne par élément, nom identique à la liste.`;
     }
 
-    return `You are a Google Tag Manager expert. An analytics consultant is publishing a GTM workspace. Generate a title and description that allow any colleague to understand at a glance what was done and why — not just a list, but a real analytical read.
-
-Workspace changes:
+    return `GTM expert. Workspace published with these changes:
 ${changesText}
 
-Reply EXACTLY in this format (no blank lines, no markdown, no backticks):
+STRICT format (no markdown, no blank lines):
+NAME: English title max 70 chars. Ex: "Update Commanders Act, Meta & e-commerce"
+SUMMARY: 1 complete sentence on business objective, ending with a period.
+GROUP: Platform — what these changes achieve together (2-3 lines, one per theme)
+DETAIL|EXACT name|5-12 word explanation
 
-NAME: short title in English (max 70 characters)
-SUMMARY: one complete sentence describing the overall goal of this version
-GROUP: Theme — what these changes achieve together (2 to 4 GROUP lines, one per platform or logical theme)
-DETAIL|exact element name|short explanation (5 to 15 words)
-
-Rules:
-- NAME: professional, clear, in English. Summarize main themes. Ex: "Update Commanders Act, Meta tracking & e-commerce events"
-- SUMMARY: COMPLETE sentence on business objective. Must end with a period. Ex: "Deploying Commanders Act serverside tracking, updating Meta pixels and adding e-commerce event tracking."
-- GROUP: one line per platform or logical theme. Intelligently group related elements. Format: "Theme — what these changes achieve together". 2 to 4 lines max. Ex: "Commanders Act — serverside bridge, JS SDK and site ID / source key variables"
-- DETAIL: one line per element, EXACT name between pipes, 5 to 15 word explanation.
-- No JSON, markdown, backticks, quotes or special characters outside the format.`;
+Rules: NAME groups main themes. SUMMARY = complete business objective. GROUP = analytical read per platform. DETAIL = one line per element, name identical to the list.`;
   }
 }
 
