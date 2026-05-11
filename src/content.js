@@ -212,74 +212,78 @@ class GTM13hGenerator {
 
   // Construire la sortie finale : Gemini fournit le titre + résumé, JS structure la liste
   buildOutput(aiResult, changes) {
-    // Grouper les modifications par action
-    const groups = {
-      added: [],
-      modified: [],
-      deleted: []
-    };
-    
+    const isFR = this.detectLanguage() === 'fr';
+
+    const buckets = { added: [], modified: [], deleted: [] };
     for (const change of changes) {
       const action = change.action.toLowerCase();
       if (/ajouté|added|nouveau|new|créé|created/.test(action)) {
-        groups.added.push(change);
+        buckets.added.push(change);
       } else if (/supprimé|deleted|retiré|removed/.test(action)) {
-        groups.deleted.push(change);
+        buckets.deleted.push(change);
       } else {
-        groups.modified.push(change);
+        buckets.modified.push(change);
       }
     }
-    
-    // Construire la description structurée
+
+    const labels = isFR
+      ? { added: '→ AJOUTS :', modified: '→ MODIFICATIONS :', deleted: '→ SUPPRESSIONS :' }
+      : { added: '→ ADDED:', modified: '→ MODIFIED:', deleted: '→ DELETED:' };
+
     const lines = [];
-    
-    // Résumé Gemini en première ligne (s'il existe)
+
     if (aiResult.summary) {
       lines.push(aiResult.summary);
-      lines.push('');
     }
-    
-    if (groups.added.length > 0) {
-      lines.push('→ AJOUTS :');
-      for (const c of groups.added) {
-        const detail = aiResult.details?.[c.name];
-        lines.push(`  • ${c.type} : ${c.name}${detail ? ' — ' + detail : ''}`);
+
+    if (aiResult.themeGroups?.length > 0) {
+      lines.push('');
+      for (const group of aiResult.themeGroups) {
+        lines.push(`• ${group}`);
       }
-      lines.push('');
     }
-    
-    if (groups.modified.length > 0) {
-      lines.push('→ MODIFICATIONS :');
-      for (const c of groups.modified) {
-        const detail = aiResult.details?.[c.name];
-        lines.push(`  • ${c.type} : ${c.name}${detail ? ' — ' + detail : ''}`);
-      }
+
+    if (buckets.added.length > 0) {
       lines.push('');
-    }
-    
-    if (groups.deleted.length > 0) {
-      lines.push('→ SUPPRESSIONS :');
-      for (const c of groups.deleted) {
+      lines.push(labels.added);
+      for (const c of buckets.added) {
         const detail = aiResult.details?.[c.name];
         lines.push(`  • ${c.type} : ${c.name}${detail ? ' — ' + detail : ''}`);
       }
     }
-    
-    // Nom de version
+
+    if (buckets.modified.length > 0) {
+      lines.push('');
+      lines.push(labels.modified);
+      for (const c of buckets.modified) {
+        const detail = aiResult.details?.[c.name];
+        lines.push(`  • ${c.type} : ${c.name}${detail ? ' — ' + detail : ''}`);
+      }
+    }
+
+    if (buckets.deleted.length > 0) {
+      lines.push('');
+      lines.push(labels.deleted);
+      for (const c of buckets.deleted) {
+        const detail = aiResult.details?.[c.name];
+        lines.push(`  • ${c.type} : ${c.name}${detail ? ' — ' + detail : ''}`);
+      }
+    }
+
     let versionName = aiResult.name || '';
     if (!versionName) {
-      const date = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      versionName = `Version ${date}`;
+      const locale = isFR ? 'fr-FR' : 'en-US';
+      const date = new Date().toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+      versionName = isFR ? `Version ${date}` : `Version ${date}`;
     }
-    // Nettoyer le markdown résiduel et limiter la longueur
     versionName = versionName
       .replace(/\*\*/g, '').replace(/##/g, '').replace(/[`~\[\]()]/g, '')
       .trim()
       .substring(0, 80);
-    
-    return { 
-      versionName, 
-      description: lines.join('\n').trim() 
+
+    return {
+      versionName,
+      description: lines.join('\n').trim()
     };
   }
 
@@ -564,7 +568,7 @@ class GTM13hGenerator {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const body = JSON.stringify({
       contents: [{ parts: [{ text: this.buildPrompt(changes) }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 512 }
+      generationConfig: { temperature: 0.3, maxOutputTokens: 1024 }
     });
 
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -598,30 +602,29 @@ class GTM13hGenerator {
 
   parseGeminiResponse(rawText, changes) {
     const lines = rawText.split('\n').map(l => l.trim()).filter(l => l);
-    
+
     let name = '';
     let summary = '';
+    const themeGroups = [];
     const details = {};
-    
+
     for (const line of lines) {
       if (line.startsWith('NAME:')) {
         name = line.substring(5).trim();
       } else if (line.startsWith('SUMMARY:')) {
         summary = line.substring(8).trim();
+      } else if (line.startsWith('GROUP:')) {
+        themeGroups.push(line.substring(6).trim());
       } else if (line.startsWith('DETAIL|')) {
         const parts = line.substring(7).split('|');
         if (parts.length >= 2) {
-          const elementName = parts[0].trim();
-          const explanation = parts[1].trim();
-          details[elementName] = explanation;
+          details[parts[0].trim()] = parts[1].trim();
         }
       }
     }
-    
-    // Matching souple des details aux noms réels des changements
+
     const matchedDetails = this.matchDetails(details, changes);
-    
-    return { name, summary, details: matchedDetails };
+    return { name, summary, themeGroups, details: matchedDetails };
   }
 
   // Associer les détails Gemini aux noms exacts des changements (matching souple)
@@ -656,28 +659,60 @@ class GTM13hGenerator {
     return matched;
   }
 
+  detectLanguage() {
+    const htmlLang = (document.documentElement.lang || '').toLowerCase();
+    if (htmlLang.startsWith('fr')) return 'fr';
+    if (htmlLang.startsWith('en')) return 'en';
+
+    const bodyText = document.body?.innerText || '';
+    if (/\bpublier\b|\bbalise\b|\bdéclencheur\b|\bespace de travail\b/i.test(bodyText)) return 'fr';
+
+    return (navigator.language || '').toLowerCase().startsWith('fr') ? 'fr' : 'en';
+  }
+
   buildPrompt(changes) {
-    const changesText = changes.map(c => 
-      `- [${c.action}] ${c.type} : "${c.name}"`
-    ).join('\n');
+    const isFR = this.detectLanguage() === 'fr';
+    const changesText = changes.map(c => `- [${c.action}] ${c.type} : "${c.name}"`).join('\n');
 
-    return `Tu es un expert Google Tag Manager. Un consultant analytics publie un workspace GTM avec les modifications ci-dessous. Génère un titre de version et des explications pour qu'un collègue comprenne ce qui a été fait.
+    if (isFR) {
+      return `Tu es un expert Google Tag Manager. Un consultant analytics publie un workspace GTM. Génère un titre et une description qui permettent à n'importe quel collègue de comprendre en un coup d'œil ce qui a été fait et pourquoi — pas juste une liste, mais une vraie lecture analytique.
 
-Modifications :
+Modifications du workspace :
 ${changesText}
 
-Réponds EXACTEMENT dans ce format (une ligne par instruction, pas de ligne vide, pas de markdown) :
+Réponds EXACTEMENT dans ce format (aucune ligne vide, aucun markdown, aucun backtick) :
 
-NAME: titre court de la version en français (max 70 caractères)
-SUMMARY: une phrase résumant l'objectif global des modifications
-DETAIL|nom exact element 1|explication courte de ce qui a changé
-DETAIL|nom exact element 2|explication courte de ce qui a changé
+NAME: titre court en français (max 70 caractères)
+SUMMARY: une phrase complète décrivant l'objectif global de cette version
+GROUP: Thème — ce que ces changements apportent concrètement (2 à 4 lignes GROUP, une par plateforme ou thème logique)
+DETAIL|nom exact element|explication courte (5 à 15 mots)
 
 Règles :
-- NAME : professionnel, clair, en français. Ex: "MAJ tracking Commanders Act & pageview"
-- SUMMARY : une seule phrase, impact métier. Ex: "Mise à jour des balises Commanders Act et correction du tag de page vue."
-- DETAIL : une ligne par élément modifié. Le nom entre les | doit être le nom EXACT de l'élément tel qu'il apparaît dans la liste ci-dessus. L'explication fait 5 à 15 mots.
-- Pas de JSON, pas de markdown, pas de backticks, pas de guillemets. Juste le format ci-dessus.`;
+- NAME : professionnel, clair, en français. Regroupe les grands thèmes. Ex: "MAJ tracking Commanders Act, Meta et e-commerce"
+- SUMMARY : phrase COMPLÈTE sur l'objectif métier. Doit se terminer par un point. Ex: "Déploiement du tracking Commanders Act serverside, refonte des balises Meta et ajout du suivi e-commerce."
+- GROUP : une ligne par plateforme ou thème logique. Regroupe intelligemment les éléments liés. Format: "Thème — ce que ces changements font ensemble". 2 à 4 lignes max. Ex: "Commanders Act — intégration bridge serverside, SDK JS et variables site ID / source key"
+- DETAIL : une ligne par élément, nom EXACT entre les pipes, explication 5 à 15 mots.
+- Aucun JSON, markdown, backtick, guillemet ou caractère spécial hors format.`;
+    }
+
+    return `You are a Google Tag Manager expert. An analytics consultant is publishing a GTM workspace. Generate a title and description that allow any colleague to understand at a glance what was done and why — not just a list, but a real analytical read.
+
+Workspace changes:
+${changesText}
+
+Reply EXACTLY in this format (no blank lines, no markdown, no backticks):
+
+NAME: short title in English (max 70 characters)
+SUMMARY: one complete sentence describing the overall goal of this version
+GROUP: Theme — what these changes achieve together (2 to 4 GROUP lines, one per platform or logical theme)
+DETAIL|exact element name|short explanation (5 to 15 words)
+
+Rules:
+- NAME: professional, clear, in English. Summarize main themes. Ex: "Update Commanders Act, Meta tracking & e-commerce events"
+- SUMMARY: COMPLETE sentence on business objective. Must end with a period. Ex: "Deploying Commanders Act serverside tracking, updating Meta pixels and adding e-commerce event tracking."
+- GROUP: one line per platform or logical theme. Intelligently group related elements. Format: "Theme — what these changes achieve together". 2 to 4 lines max. Ex: "Commanders Act — serverside bridge, JS SDK and site ID / source key variables"
+- DETAIL: one line per element, EXACT name between pipes, 5 to 15 word explanation.
+- No JSON, markdown, backticks, quotes or special characters outside the format.`;
   }
 }
 
