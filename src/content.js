@@ -618,19 +618,26 @@ class GTM13hGenerator {
     let summary = '';
     const themeGroups = [];
     const details = {};
+    let lastField = null;
 
     for (const line of lines) {
       if (line.startsWith('NAME:')) {
         name = line.substring(5).trim();
+        lastField = 'name';
       } else if (line.startsWith('SUMMARY:')) {
         summary = line.substring(8).trim();
+        lastField = 'summary';
       } else if (line.startsWith('GROUP:')) {
         themeGroups.push(line.substring(6).trim());
+        lastField = 'group';
       } else if (line.startsWith('DETAIL|')) {
         const parts = line.substring(7).split('|');
         if (parts.length >= 2) {
           details[parts[0].trim()] = parts[1].trim();
         }
+        lastField = 'detail';
+      } else if (lastField === 'summary') {
+        summary += ' ' + line;
       }
     }
 
@@ -691,7 +698,7 @@ ${changesText}
 
 Format STRICT (pas de markdown, pas de ligne vide) :
 NAME: titre français max 70 car. Ex: "MAJ Commanders Act, Meta et e-commerce"
-SUMMARY: 1 phrase complète sur l'objectif métier, terminée par un point.
+SUMMARY: 1 phrase complète SUR UNE SEULE LIGNE, terminée par un point.
 GROUP: Plateforme — ce que ces changements font ensemble (2-3 lignes, une par thème)
 DETAIL|nom EXACT|explication 5-12 mots
 
@@ -703,7 +710,7 @@ ${changesText}
 
 STRICT format (no markdown, no blank lines):
 NAME: English title max 70 chars. Ex: "Update Commanders Act, Meta & e-commerce"
-SUMMARY: 1 complete sentence on business objective, ending with a period.
+SUMMARY: 1 complete sentence ON A SINGLE LINE, ending with a period.
 GROUP: Platform — what these changes achieve together (2-3 lines, one per theme)
 DETAIL|EXACT name|5-12 word explanation
 
