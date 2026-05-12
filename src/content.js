@@ -564,7 +564,7 @@ class GTM13hGenerator {
     }
 
     const button = document.querySelector('.gtm13h-button');
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
 
     for (const model of models) {
       const result = await this.tryModel(apiKey, model, changes, button);
