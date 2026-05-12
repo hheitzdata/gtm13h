@@ -110,6 +110,9 @@ La clé est stockée localement dans Chrome et n'est jamais transmise ailleurs q
 **Erreur API**
 → Testez la clé via le bouton "Tester la clé" dans le popup. Si invalide, régénérez-en une sur [Google AI Studio](https://aistudio.google.com/apikey).
 
+**"API Gemini indisponible" ou génération lente**
+→ Le free tier de Gemini est limité à 10 requêtes/minute. Si vous utilisez l'extension fréquemment, activez la facturation sur votre projet Google AI Studio — c'est gratuit jusqu'à un certain seuil et passe la limite à 150 req/min. Aucun moyen de paiement requis immédiatement. [Activer la facturation](https://aistudio.google.com/apikey)
+
 ---
 
 ## Limites connues
