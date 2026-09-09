@@ -71,7 +71,7 @@ L'extension nécessite une clé API Gemini (gratuite) :
 4. Copier la clé générée (elle commence par `AIza...`)
 5. Cliquer sur l'icône GTM13h dans Chrome → coller la clé → **Enregistrer**
 
-La clé est stockée localement dans Chrome et n'est jamais transmise ailleurs que vers l'API Google.
+La clé est stockée localement sur la machine et n'est jamais transmise ailleurs que vers l'API Google. Elle est à ressaisir sur chaque poste où vous installez l'extension.
 
 ---
 
@@ -83,15 +83,18 @@ La clé est stockée localement dans Chrome et n'est jamais transmise ailleurs q
 4. **Rafraîchir les pages GTM ouvertes** (F5)
 5. La clé API est conservée, pas besoin de la reconfigurer
 
+Depuis la 1.2.0, la clé n'est plus synchronisée entre vos machines : celle déjà configurée est rapatriée en stockage local à la première utilisation, et sera à ressaisir une fois sur vos autres postes.
+
 ---
 
 ## Détails techniques
 
 - **Manifest V3** (standard Chrome actuel)
-- **Modèle** : Gemini 2.5 Flash via API Google Generative Language
-- **Permissions** : accès à `tagmanager.google.com` uniquement + appel API Gemini
-- **Stockage** : la clé API est dans `chrome.storage.sync` (synchronisée entre les sessions Chrome du même compte)
-- **Détection** : l'extension cible l'overlay de publication GTM (`gtm-draft-submit-page`) et lit le tableau "Workspace Changes" à l'intérieur
+- **Modèle** : Gemini 2.5 Flash, avec repli sur Gemini 2.5 Flash Lite si le premier est indisponible
+- **Permissions** : `storage` uniquement, plus l'accès à `tagmanager.google.com` et à l'API Gemini
+- **Stockage** : la clé API est dans `chrome.storage.local`, elle ne quitte pas la machine et n'est pas synchronisée vers votre compte Google. Elle est transmise à l'API Gemini via l'en-tête `x-goog-api-key`, jamais dans l'URL
+- **Détection** : l'extension cible la page de publication GTM (`gtm-draft-submit-page`) et lit le tableau "Workspace Changes" à l'intérieur. Le bouton n'est injecté nulle part ailleurs, et disparaît dès qu'on quitte cette page
+- **Données envoyées** : uniquement les noms, types et actions des éléments modifiés du workspace, transmis à l'API Gemini de Google pour rédiger le résumé. Aucun autre contenu de votre conteneur ne quitte le navigateur. Attention : sur le free tier de l'API Gemini, Google utilise les contenus soumis pour améliorer ses produits. Sur un projet avec facturation activée, ce n'est pas le cas — à privilégier pour des conteneurs clients ([conditions de l'API Gemini](https://ai.google.dev/gemini-api/terms))
 - **Langues** : fonctionne avec l'interface GTM en français et en anglais
 
 ---
@@ -99,7 +102,7 @@ La clé est stockée localement dans Chrome et n'est jamais transmise ailleurs q
 ## Dépannage
 
 **Le bouton n'apparaît pas**
-→ Vérifiez que vous êtes sur la page de publication (après avoir cliqué "Submit" dans GTM). Le bouton s'affiche uniquement quand le champ de description est visible.
+→ Vérifiez que vous êtes sur la page de publication (après avoir cliqué "Submit" dans GTM). Le bouton s'affiche uniquement là, et jamais sur les écrans d'édition de balises, de variables ou de modèles.
 
 **"Aucune modification détectée"**
 → Le workspace ne contient pas de modifications, ou l'interface GTM a changé. Vérifiez que des modifications apparaissent dans la section "Workspace Changes".
@@ -111,7 +114,7 @@ La clé est stockée localement dans Chrome et n'est jamais transmise ailleurs q
 → Testez la clé via le bouton "Tester la clé" dans le popup. Si invalide, régénérez-en une sur [Google AI Studio](https://aistudio.google.com/apikey).
 
 **"API Gemini indisponible" ou génération lente**
-→ Le free tier de Gemini est limité à 10 requêtes/minute. Si vous utilisez l'extension fréquemment, activez la facturation sur votre projet Google AI Studio — c'est gratuit jusqu'à un certain seuil et passe la limite à 150 req/min. Aucun moyen de paiement requis immédiatement. [Activer la facturation](https://aistudio.google.com/apikey)
+→ Le free tier de Gemini est limité en requêtes par minute. Si vous utilisez l'extension fréquemment, activez la facturation sur votre projet Google AI Studio — cela relève la limite, et Google n'utilise alors plus les contenus envoyés pour améliorer ses produits. [Activer la facturation](https://aistudio.google.com/apikey)
 
 ---
 

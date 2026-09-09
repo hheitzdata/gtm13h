@@ -1,10 +1,47 @@
 // GTM13h — Script principal pour la génération de descriptions de versions GTM
+
+// Racine de la page de publication ("Submit") de GTM. Le bouton ne doit
+// s'injecter QUE là : les éditeurs de balises, variables et modèles ont eux
+// aussi des champs "Description" / "Notes" qui matchaient les sélecteurs.
+const SUBMIT_ROOT_SELECTORS = [
+  'gtm-draft-submit-page',
+  '[class*="gtm-draft-submit"]',
+  '[class*="draft-submit-page"]'
+];
+
+// Intitulé du tableau des modifications, signature de la page de publication
+const WORKSPACE_CHANGES_MARKERS = [
+  'workspace changes',
+  "modifications de l'espace de travail",
+  'modifications apportées'
+];
+
+// Champ "Description de la version" dans la page de publication
+const NOTES_SELECTORS = [
+  'textarea[data-ng-model="ctrl.versionForm.notes"]',
+  'textarea[placeholder*="description" i]',
+  'textarea[placeholder*="modifications" i]',
+  'textarea[placeholder*="changes" i]',
+  '.version-form textarea',
+  '[data-testid="version-notes"] textarea'
+];
+
+// Champ "Nom de la version" dans la page de publication
+const VERSION_NAME_SELECTORS = [
+  'input[data-ng-model="ctrl.versionForm.name"]',
+  'input[placeholder*="nom" i]',
+  'input[placeholder*="name" i]',
+  'input[placeholder*="descriptif" i]',
+  'input[placeholder*="descriptive" i]',
+  '.version-form input[type="text"]',
+  '[data-testid="version-name"] input'
+];
+
 class GTM13hGenerator {
   constructor() {
     this.isGenerating = false;
     this.observer = null;
     this.checkTimeout = null;
-    this.lastUrl = '';
     this.init();
   }
 
@@ -33,148 +70,161 @@ class GTM13hGenerator {
   }
 
   checkForPublishDialog() {
-    // Si le bouton existe déjà dans le DOM, ne rien faire
     const existingButton = document.querySelector('.gtm13h-button');
-    if (existingButton) return;
+    const root = this.findSubmitRoot();
 
-    // Chercher l'overlay de publication GTM
-    const overlay = document.querySelector('gtm-draft-submit-page, [class*="gtm-draft-submit"]');
-    const searchRoot = overlay || document;
-
-    // Chercher le textarea de description de version (FR + EN)
-    const selectors = [
-      'textarea[data-ng-model="ctrl.versionForm.notes"]',
-      'textarea[placeholder*="description"]',
-      'textarea[placeholder*="Description"]',
-      'textarea[placeholder*="modifications"]',
-      'textarea[placeholder*="changes"]',
-      '.version-form textarea',
-      '[data-testid="version-notes"] textarea'
-    ];
-
-    let versionTextarea = null;
-    for (const selector of selectors) {
-      versionTextarea = searchRoot.querySelector(selector);
-      if (versionTextarea) break;
+    // Hors de la page de publication : retirer un bouton résiduel
+    if (!root) {
+      if (existingButton) existingButton.remove();
+      return;
     }
 
-    // Fallback : chercher par placeholder en texte libre
-    if (!versionTextarea) {
-      const textareas = searchRoot.querySelectorAll('textarea');
-      for (const textarea of textareas) {
-        const placeholder = textarea.placeholder?.toLowerCase() || '';
-        if (placeholder.includes('description') || placeholder.includes('modifications') || placeholder.includes('changes')) {
-          versionTextarea = textarea;
-          break;
-        }
+    if (existingButton) {
+      if (root.contains(existingButton)) return;
+      existingButton.remove();
+    }
+
+    const versionTextarea = this.findNotesTextarea(root);
+    if (!versionTextarea) return;
+
+    this.injectButton(versionTextarea);
+  }
+
+  // Racine de la page de publication, ou null si on n'y est pas
+  findSubmitRoot() {
+    for (const selector of SUBMIT_ROOT_SELECTORS) {
+      for (const el of document.querySelectorAll(selector)) {
+        // GTM laisse parfois le composant en cache, masqué, après navigation
+        if (this.isVisible(el)) return el;
       }
     }
-    
-    if (versionTextarea) {
-      console.log('[GTM13h] Interface de publication détectée', overlay ? '(overlay)' : '(document)');
-      this.injectButton(versionTextarea);
+    return this.findSubmitRootByHeading();
+  }
+
+  // Repli si GTM renomme son composant : on exige la signature complète de la
+  // page de publication (tableau des modifications + nom de version + notes)
+  findSubmitRootByHeading() {
+    if (!this.findNotesTextarea(document)) return null;
+
+    const heading = this.findWorkspaceChangesHeading(document);
+    if (!heading) return null;
+
+    // On s'arrête avant <body> : accepter le document entier comme racine
+    // reviendrait à réintroduire l'injection hors page de publication
+    let node = heading;
+    for (let i = 0; i < 8 && node && node !== document.body; i++) {
+      if (this.findNotesTextarea(node) && this.findVersionNameInput(node) && this.isVisible(node)) {
+        return node;
+      }
+      node = node.parentElement;
     }
+    return null;
+  }
+
+  findWorkspaceChangesHeading(root) {
+    const elements = root.querySelectorAll('div, span, h1, h2, h3, h4, h5, h6, p');
+    for (const el of elements) {
+      const text = this.getDirectTextContent(el).toLowerCase().trim();
+      if (WORKSPACE_CHANGES_MARKERS.some(marker => text.includes(marker))) return el;
+    }
+    return null;
+  }
+
+  findNotesTextarea(root) {
+    return this.findFirst(root, NOTES_SELECTORS);
+  }
+
+  findVersionNameInput(root) {
+    return this.findFirst(root, VERSION_NAME_SELECTORS);
+  }
+
+  findFirst(root, selectors) {
+    for (const selector of selectors) {
+      const el = root.querySelector(selector);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  isVisible(el) {
+    return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
   }
 
   injectButton(textarea) {
-    // Double-check : ne pas injecter si le bouton existe déjà
-    if (document.querySelector('.gtm13h-button')) return;
-
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'gtm13h-button';
-    button.innerHTML = 'Générer la description';
+    button.textContent = 'Générer la description';
     button.title = 'Générer automatiquement le nom et la description de version';
-    
+
     button.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       this.generateDescription(textarea);
     });
 
-    const container = textarea.parentElement;
-    container.insertBefore(button, textarea);
-    
+    textarea.parentElement.insertBefore(button, textarea);
     console.log('[GTM13h] Bouton injecté');
-  }
-
-  findVersionNameInput() {
-    const overlay = document.querySelector('gtm-draft-submit-page, [class*="gtm-draft-submit"]');
-    const searchRoot = overlay || document;
-
-    const selectors = [
-      'input[data-ng-model="ctrl.versionForm.name"]',
-      'input[placeholder*="nom"]',
-      'input[placeholder*="name"]',
-      'input[placeholder*="descriptif"]',
-      'input[placeholder*="descriptive"]',
-      '.version-form input[type="text"]',
-      '[data-testid="version-name"] input'
-    ];
-
-    for (const selector of selectors) {
-      const input = searchRoot.querySelector(selector);
-      if (input) return input;
-    }
-
-    const inputs = searchRoot.querySelectorAll('input[type="text"]');
-    for (const input of inputs) {
-      const placeholder = input.placeholder?.toLowerCase() || '';
-      if (placeholder.includes('nom') || placeholder.includes('name') || placeholder.includes('descriptif') || placeholder.includes('descriptive')) {
-        return input;
-      }
-    }
-
-    return null;
   }
 
   async generateDescription(textarea) {
     if (this.isGenerating) return;
-    
-    this.isGenerating = true;
+
     const button = document.querySelector('.gtm13h-button');
-    const originalText = button.innerHTML;
-    
+    if (!button) return;
+
+    const originalText = button.textContent;
+    this.isGenerating = true;
+
     try {
-      button.innerHTML = 'Vérification...';
+      button.textContent = 'Vérification...';
       const apiKey = await this.getApiKey();
-      
+
       if (!apiKey) {
+        button.textContent = originalText;
         alert('Clé API Gemini manquante.\nConfigurez-la via l\'icône GTM13h dans la barre d\'extensions.');
         return;
       }
 
-      button.innerHTML = 'Scan des modifications...';
-      const changes = this.extractChanges();
-      
+      const root = this.findSubmitRoot();
+      if (!root) {
+        button.textContent = originalText;
+        alert('Page de publication GTM introuvable.\nRafraîchissez la page (F5) puis réessayez.');
+        return;
+      }
+
+      button.textContent = 'Scan des modifications...';
+      const changes = this.extractChanges(root);
+
       console.log('[GTM13h] Modifications trouvées :', changes);
-      
+
       if (changes.length === 0) {
+        button.textContent = originalText;
         alert('Aucune modification détectée.\nVérifiez que vous êtes sur la page de publication GTM avec des modifications visibles.');
         return;
       }
 
-      button.innerHTML = 'Génération...';
+      button.textContent = 'Génération...';
       const aiResult = await this.callGeminiAPI(apiKey, changes);
-      
-      // Construire le nom et la description à partir du JSON Gemini + données DOM
+
+      // Construire le nom et la description à partir de la réponse Gemini + données DOM
       const { versionName, description } = this.buildOutput(aiResult, changes);
-      
+
       // Remplir le nom de version
-      const versionNameInput = this.findVersionNameInput();
+      const versionNameInput = this.findVersionNameInput(root);
       if (versionNameInput) {
         this.setFieldValue(versionNameInput, versionName);
         console.log('[GTM13h] Nom de version :', versionName);
       } else {
         console.warn('[GTM13h] Champ nom de version non trouvé');
       }
-      
+
       // Remplir la description
       this.setFieldValue(textarea, description);
-      
-      button.innerHTML = 'Terminé ✓';
-      setTimeout(() => { button.innerHTML = originalText; }, 2000);
-      
+
+      button.textContent = 'Terminé ✓';
+      setTimeout(() => { button.textContent = originalText; }, 2000);
+
     } catch (error) {
       console.error('[GTM13h] Erreur :', error);
       if (error.message === 'CONTEXT_INVALIDATED') {
@@ -182,8 +232,8 @@ class GTM13hGenerator {
       } else {
         alert(`Erreur : ${error.message}`);
       }
-      button.innerHTML = 'Erreur';
-      setTimeout(() => { button.innerHTML = originalText; }, 3000);
+      button.textContent = 'Erreur';
+      setTimeout(() => { button.textContent = originalText; }, 3000);
     } finally {
       this.isGenerating = false;
     }
@@ -210,15 +260,18 @@ class GTM13hGenerator {
     element.dispatchEvent(new Event('keyup', { bubbles: true }));
   }
 
+  // Sortie de secours quand aucun modèle Gemini n'est joignable
   buildFallbackResult(changes) {
     const isFR = this.detectLanguage() === 'fr';
-    const date = new Date().toLocaleDateString(isFR ? 'fr-FR' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const types = [...new Set(changes.map(c => c.type).filter(Boolean))];
-    const name = isFR ? `Version ${date}` : `Version ${date}`;
+    const date = this.formatDate(isFR);
     const summary = isFR
       ? `Publication du ${date} — API Gemini indisponible, description générée automatiquement.`
       : `Published ${date} — Gemini API unavailable, description auto-generated.`;
-    return this.buildOutput({ name, summary, themeGroups: [], details: {} }, changes);
+    return this.buildOutput({ name: `Version ${date}`, summary, themeGroups: [], details: {} }, changes);
+  }
+
+  formatDate(isFR) {
+    return new Date().toLocaleDateString(isFR ? 'fr-FR' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
   // Construire la sortie finale : Gemini fournit le titre + résumé, JS structure la liste
@@ -254,40 +307,17 @@ class GTM13hGenerator {
       }
     }
 
-    if (buckets.added.length > 0) {
+    for (const bucket of ['added', 'modified', 'deleted']) {
+      if (buckets[bucket].length === 0) continue;
       lines.push('');
-      lines.push(labels.added);
-      for (const c of buckets.added) {
+      lines.push(labels[bucket]);
+      for (const c of buckets[bucket]) {
         const detail = aiResult.details?.[c.name];
         lines.push(`  • ${c.type} : ${c.name}${detail ? ' — ' + detail : ''}`);
       }
     }
 
-    if (buckets.modified.length > 0) {
-      lines.push('');
-      lines.push(labels.modified);
-      for (const c of buckets.modified) {
-        const detail = aiResult.details?.[c.name];
-        lines.push(`  • ${c.type} : ${c.name}${detail ? ' — ' + detail : ''}`);
-      }
-    }
-
-    if (buckets.deleted.length > 0) {
-      lines.push('');
-      lines.push(labels.deleted);
-      for (const c of buckets.deleted) {
-        const detail = aiResult.details?.[c.name];
-        lines.push(`  • ${c.type} : ${c.name}${detail ? ' — ' + detail : ''}`);
-      }
-    }
-
-    let versionName = aiResult.name || '';
-    if (!versionName) {
-      const locale = isFR ? 'fr-FR' : 'en-US';
-      const date = new Date().toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
-      versionName = isFR ? `Version ${date}` : `Version ${date}`;
-    }
-    versionName = versionName
+    const versionName = (aiResult.name || `Version ${this.formatDate(isFR)}`)
       .replace(/\*\*/g, '').replace(/##/g, '').replace(/[`~\[\]()]/g, '')
       .trim()
       .substring(0, 80);
@@ -298,56 +328,41 @@ class GTM13hGenerator {
     };
   }
 
+  // Toute erreur de stockage dans un content script signifie en pratique que
+  // l'extension a été rechargée sous la page : on le signale comme tel
   async getApiKey() {
-    return new Promise((resolve, reject) => {
-      try {
-        if (!chrome?.storage?.sync) {
-          reject(new Error('CONTEXT_INVALIDATED'));
-          return;
-        }
-        chrome.storage.sync.get(['geminiApiKey'], (result) => {
-          if (chrome.runtime.lastError) {
-            reject(new Error('CONTEXT_INVALIDATED'));
-            return;
-          }
-          resolve(result.geminiApiKey || null);
-        });
-      } catch (e) {
-        reject(new Error('CONTEXT_INVALIDATED'));
-      }
-    });
+    try {
+      if (!chrome?.storage?.local) throw new Error('CONTEXT_INVALIDATED');
+      return await readApiKey();
+    } catch (e) {
+      throw new Error('CONTEXT_INVALIDATED');
+    }
   }
 
-  extractChanges() {
+  extractChanges(root) {
     console.log('[GTM13h] Extraction des modifications...');
-    
-    // Cibler spécifiquement l'overlay de publication GTM
-    const overlay = document.querySelector('gtm-draft-submit-page, [class*="gtm-draft-submit"]');
-    const searchRoot = overlay || document;
-    
-    console.log('[GTM13h] Recherche dans :', overlay ? 'overlay submit' : 'document entier');
-    
+
     // Méthode 1 : section gtm-draft-change-list (structure GTM spécifique)
-    const draftChanges = this.extractFromDraftChangeList(searchRoot);
+    const draftChanges = this.extractFromDraftChangeList(root);
     if (draftChanges.length > 0) {
       console.log('[GTM13h] Via draft-change-list :', draftChanges);
       return draftChanges;
     }
-    
+
     // Méthode 2 : heading "Workspace Changes" + tableau en dessous
-    const headingChanges = this.extractFromWorkspaceChangesHeading(searchRoot);
+    const headingChanges = this.extractFromWorkspaceChangesHeading(root);
     if (headingChanges.length > 0) {
       console.log('[GTM13h] Via heading Workspace Changes :', headingChanges);
       return headingChanges;
     }
-    
-    // Méthode 3 : tous les liens cliquables dans l'overlay qui ressemblent à des éléments GTM
-    const linkChanges = this.extractFromLinks(searchRoot);
+
+    // Méthode 3 : tous les liens cliquables de la page qui ressemblent à des éléments GTM
+    const linkChanges = this.extractFromLinks(root);
     if (linkChanges.length > 0) {
       console.log('[GTM13h] Via liens :', linkChanges);
       return linkChanges;
     }
-    
+
     console.warn('[GTM13h] Aucune modification trouvée');
     return [];
   }
@@ -391,32 +406,20 @@ class GTM13hGenerator {
 
   // Méthode 2 : trouver le heading "Workspace Changes" puis lire le tableau en dessous
   extractFromWorkspaceChangesHeading(root) {
-    const targets = ['workspace changes', 'modifications de l\'espace de travail', 'modifications apportées'];
-    
-    // Chercher le heading dans les éléments texte de l'overlay
-    const allElements = root.querySelectorAll('div, span, h1, h2, h3, h4, h5, h6, p');
-    let heading = null;
-    
-    for (const el of allElements) {
-      const directText = this.getDirectTextContent(el).toLowerCase().trim();
-      if (targets.some(t => directText.includes(t))) {
-        heading = el;
-        break;
-      }
-    }
-    
+    const heading = this.findWorkspaceChangesHeading(root);
     if (!heading) return [];
-    
+
     console.log('[GTM13h] Heading trouvé :', heading.textContent.trim());
-    
-    // Remonter au container parent et chercher le tableau
-    let container = heading.parentElement;
+
+    // Le heading peut être le libellé seul ou déjà le container : on part de
+    // lui puis on remonte jusqu'à trouver le tableau
+    let container = heading;
     for (let i = 0; i < 6 && container && container !== root; i++) {
       const changes = this.extractRowsFromContainer(container);
       if (changes.length > 0) return changes;
       container = container.parentElement;
     }
-    
+
     return [];
   }
 
@@ -519,8 +522,11 @@ class GTM13hGenerator {
     const unique = [];
     const seen = new Set();
     for (const c of changes) {
-      if (!seen.has(c.name)) {
-        seen.add(c.name);
+      // Clé sur type + nom : dans GTM une balise et un déclencheur portent
+      // souvent le même nom, les deux doivent apparaître dans la description
+      const key = `${c.type}|${c.name}`;
+      if (!seen.has(key)) {
+        seen.add(key);
         unique.push(c);
       }
     }
@@ -555,7 +561,7 @@ class GTM13hGenerator {
   }
 
   async callGeminiAPI(apiKey, changes) {
-    if (!window.location.hostname.includes('tagmanager.google.com')) {
+    if (window.location.hostname !== 'tagmanager.google.com') {
       throw new Error('Extension utilisable uniquement sur GTM');
     }
 
@@ -564,19 +570,28 @@ class GTM13hGenerator {
     }
 
     const button = document.querySelector('.gtm13h-button');
-    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    const models = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 
     for (const model of models) {
-      const result = await this.tryModel(apiKey, model, changes, button);
-      if (result !== null) return result;
-      if (button) button.innerHTML = 'Modèle alternatif...';
+      try {
+        const result = await this.tryModel(apiKey, model, changes, button);
+        if (result !== null) return result;
+      } catch (error) {
+        // Clé invalide ou refusée : inutile d'essayer les autres modèles
+        if (error.fatal) throw error;
+        console.warn(`[GTM13h] Modèle ${model} indisponible :`, error.message);
+      }
+      if (button) button.textContent = 'Modèle alternatif...';
     }
 
+    console.warn('[GTM13h] Aucun modèle Gemini disponible, description générée sans IA');
     return this.buildFallbackResult(changes);
   }
 
   async tryModel(apiKey, model, changes, button) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    // La clé passe par un en-tête et non par l'URL : elle n'apparaît ni dans
+    // l'onglet Réseau, ni dans les logs de la console
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const body = JSON.stringify({
       contents: [{ parts: [{ text: this.buildPrompt(changes) }] }],
       generationConfig: { temperature: 0.3, maxOutputTokens: 768 }
@@ -584,13 +599,16 @@ class GTM13hGenerator {
 
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) {
-        if (button) button.innerHTML = `Nouvelle tentative (${attempt}/2)...`;
+        if (button) button.textContent = `Nouvelle tentative (${attempt}/2)...`;
         await new Promise(r => setTimeout(r, 1500 * attempt));
       }
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey
+        },
         body
       });
 
@@ -602,10 +620,13 @@ class GTM13hGenerator {
         return this.parseGeminiResponse(rawText, changes);
       }
 
+      // Surcharge ou quota : on retente le même modèle
       if (response.status === 503 || response.status === 429) continue;
 
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(`API Gemini : ${errorData.error?.message || 'Erreur inconnue'}`);
+      const error = new Error(`API Gemini : ${errorData.error?.message || `HTTP ${response.status}`}`);
+      error.fatal = [400, 401, 403].includes(response.status);
+      throw error;
     }
 
     return null;

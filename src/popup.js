@@ -12,18 +12,20 @@ document.addEventListener('DOMContentLoaded', function() {
     if (e.key === 'Enter') saveApiKey();
   });
 
-  function loadApiKey() {
-    chrome.storage.sync.get(['geminiApiKey'], function(result) {
-      if (result.geminiApiKey) {
+  async function loadApiKey() {
+    try {
+      if (await readApiKey()) {
         apiKeyInput.placeholder = '••••••••••••••••••••••••••••••••';
         showStatus('Clé API configurée', 'success');
       }
-    });
+    } catch (error) {
+      showStatus('Erreur de lecture du stockage', 'error');
+    }
   }
 
-  function saveApiKey() {
+  async function saveApiKey() {
     const apiKey = apiKeyInput.value.trim();
-    
+
     if (!apiKey) {
       showStatus('Veuillez saisir une clé API', 'error');
       return;
@@ -34,16 +36,17 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    chrome.storage.sync.set({ geminiApiKey: apiKey }, function() {
-      if (chrome.runtime.lastError) {
-        showStatus('Erreur : ' + chrome.runtime.lastError.message, 'error');
-      } else {
-        showStatus('Clé API enregistrée', 'success');
-        apiKeyInput.value = '';
-        apiKeyInput.placeholder = '••••••••••••••••••••••••••••••••';
-        setTimeout(() => window.close(), 2000);
-      }
-    });
+    try {
+      await writeApiKey(apiKey);
+    } catch (error) {
+      showStatus('Erreur : ' + error.message, 'error');
+      return;
+    }
+
+    showStatus('Clé API enregistrée', 'success');
+    apiKeyInput.value = '';
+    apiKeyInput.placeholder = '••••••••••••••••••••••••••••••••';
+    setTimeout(() => window.close(), 2000);
   }
 
   function showStatus(message, type) {
@@ -52,38 +55,51 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => status.classList.remove('show'), 5000);
   }
 
-  function testApiKey() {
-    chrome.storage.sync.get(['geminiApiKey'], async function(result) {
-      if (!result.geminiApiKey) {
-        showStatus('Aucune clé API configurée', 'error');
-        return;
-      }
+  async function testApiKey() {
+    let apiKey;
+    try {
+      apiKey = await readApiKey();
+    } catch (error) {
+      showStatus('Erreur de lecture du stockage', 'error');
+      return;
+    }
 
-      showStatus('Test en cours...', 'info');
+    if (!apiKey) {
+      showStatus('Aucune clé API configurée', 'error');
+      return;
+    }
 
-      try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${result.geminiApiKey}`);
-        
-        if (response.ok) {
-          showStatus('Clé API valide', 'success');
-        } else {
-          const errorData = await response.json();
-          showStatus(`Clé invalide : ${errorData.error?.message || 'Erreur'}`, 'error');
-        }
-      } catch (error) {
-        showStatus('Erreur de connexion', 'error');
+    showStatus('Test en cours...', 'info');
+
+    try {
+      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+        headers: { 'x-goog-api-key': apiKey }
+      });
+
+      if (response.ok) {
+        showStatus('Clé API valide', 'success');
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        showStatus(`Clé invalide : ${errorData.error?.message || 'Erreur'}`, 'error');
       }
-    });
+    } catch (error) {
+      showStatus('Erreur de connexion', 'error');
+    }
   }
 
-  function clearApiKey() {
-    if (confirm('Supprimer la clé API stockée ?')) {
-      chrome.storage.sync.remove(['geminiApiKey'], function() {
-        showStatus('Clé API supprimée', 'success');
-        apiKeyInput.placeholder = 'Collez votre clé API ici...';
-        apiKeyInput.value = '';
-      });
+  async function clearApiKey() {
+    if (!confirm('Supprimer la clé API stockée ?')) return;
+
+    try {
+      await deleteApiKey();
+    } catch (error) {
+      showStatus('Erreur : ' + error.message, 'error');
+      return;
     }
+
+    showStatus('Clé API supprimée', 'success');
+    apiKeyInput.placeholder = 'Collez votre clé API ici...';
+    apiKeyInput.value = '';
   }
 
   // Bouton test
